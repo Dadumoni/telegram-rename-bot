@@ -2,10 +2,11 @@ import re
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram.error import TelegramError
 import time
+import os
 
-# Replace with your bot token
-BOT_TOKEN = "7654850355:AAGtizZP468SNYYHFJ9lQY-8Ee561vunQWk"
-CHANNEL_USERNAME = "@TGMoviez_Hub"
+# Get bot token from environment variable
+BOT_TOKEN = os.getenv('BOT_TOKEN', "7654850355:AAGtizZP468SNYYHFJ9lQY-8Ee561vunQWk")
+CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME', "@TGMoviez_Hub")
 
 def start(update, context):
     update.message.reply_text(

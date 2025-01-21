@@ -249,7 +249,7 @@ def main():
 
         # Start the bot
         logger.info("Bot is starting...")
-        updater.start_polling(drop_pending_updates=True, clean=True)
+        updater.start_polling(drop_pending_updates=True)
         logger.info("Bot is running...")
         updater.idle()
         

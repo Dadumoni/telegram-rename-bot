@@ -8,6 +8,7 @@ import sys
 import atexit
 import signal
 import tempfile
+import requests
 
 # Set up logging
 logging.basicConfig(
@@ -41,16 +42,34 @@ def signal_handler(signum, frame):
 def check_single_instance():
     """Ensure only one instance of the bot is running"""
     try:
+        # First, check if bot is already running by making an API call
+        try:
+            response = requests.get(
+                f'https://api.telegram.org/bot{BOT_TOKEN}/getMe',
+                timeout=5
+            )
+            if response.status_code != 200:
+                logger.info("Bot token is not being used by another instance")
+            else:
+                logger.error("Bot is already running somewhere else")
+                return False
+        except:
+            logger.info("Could not check bot status, proceeding with local check")
+
         if os.path.exists(LOCK_FILE):
             # Check if the process is actually running
-            with open(LOCK_FILE, 'r') as f:
-                pid = int(f.read().strip())
             try:
-                os.kill(pid, 0)  # Check if process exists
-                logger.error(f"Another instance is already running with PID {pid}")
-                return False
-            except OSError:
-                logger.info("Stale lock file found, removing it")
+                with open(LOCK_FILE, 'r') as f:
+                    pid = int(f.read().strip())
+                try:
+                    os.kill(pid, 0)  # Check if process exists
+                    logger.error(f"Another instance is already running with PID {pid}")
+                    return False
+                except OSError:
+                    logger.info("Stale lock file found, removing it")
+                    os.remove(LOCK_FILE)
+            except:
+                logger.info("Invalid lock file found, removing it")
                 os.remove(LOCK_FILE)
         
         # Create new lock file
@@ -231,11 +250,12 @@ def main():
 
     # Check for other instances
     if not check_single_instance():
+        cleanup()
         sys.exit(1)
 
     try:
         # Create updater and dispatcher
-        updater = Updater(BOT_TOKEN, use_context=True)
+        updater = Updater(BOT_TOKEN, use_context=True, request_kwargs={'read_timeout': 30, 'connect_timeout': 15})
         dp = updater.dispatcher
 
         # Add handlers
@@ -249,7 +269,7 @@ def main():
 
         # Start the bot
         logger.info("Bot is starting...")
-        updater.start_polling(drop_pending_updates=True)
+        updater.start_polling(drop_pending_updates=True, timeout=30)
         logger.info("Bot is running...")
         updater.idle()
         

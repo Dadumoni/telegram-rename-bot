@@ -5,6 +5,9 @@ import time
 import os
 import logging
 import sys
+import atexit
+import signal
+import tempfile
 
 # Set up logging
 logging.basicConfig(
@@ -17,11 +20,53 @@ logger = logging.getLogger(__name__)
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7654850355:AAGtizZP468SNYYHFJ9lQY-8Ee561vunQWk")
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME', "@TGMoviez_Hub")
 
+# Lock file path
+LOCK_FILE = os.path.join(tempfile.gettempdir(), 'telegram_rename_bot.lock')
+
+def cleanup():
+    """Clean up function to remove lock file"""
+    try:
+        if os.path.exists(LOCK_FILE):
+            os.remove(LOCK_FILE)
+            logger.info("Lock file removed")
+    except Exception as e:
+        logger.error(f"Error removing lock file: {e}")
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals"""
+    logger.info(f"Received signal {signum}")
+    cleanup()
+    sys.exit(0)
+
+def check_single_instance():
+    """Ensure only one instance of the bot is running"""
+    try:
+        if os.path.exists(LOCK_FILE):
+            # Check if the process is actually running
+            with open(LOCK_FILE, 'r') as f:
+                pid = int(f.read().strip())
+            try:
+                os.kill(pid, 0)  # Check if process exists
+                logger.error(f"Another instance is already running with PID {pid}")
+                return False
+            except OSError:
+                logger.info("Stale lock file found, removing it")
+                os.remove(LOCK_FILE)
+        
+        # Create new lock file
+        with open(LOCK_FILE, 'w') as f:
+            f.write(str(os.getpid()))
+        return True
+    except Exception as e:
+        logger.error(f"Error checking/creating lock file: {e}")
+        return False
+
 def error_handler(update, context):
     """Log Errors caused by Updates."""
     logger.warning('Update "%s" caused error "%s"', update, context.error)
     if isinstance(context.error, Conflict):
         logger.error("Conflict error: Another instance is running")
+        cleanup()
         sys.exit(1)
 
 def start(update, context):
@@ -179,6 +224,15 @@ def process_all_command(update, context):
         message.reply_text(f"Error while processing messages. Please try again or contact support.")
 
 def main():
+    # Register cleanup handlers
+    atexit.register(cleanup)
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Check for other instances
+    if not check_single_instance():
+        sys.exit(1)
+
     try:
         # Create updater and dispatcher
         updater = Updater(BOT_TOKEN, use_context=True)
@@ -195,12 +249,13 @@ def main():
 
         # Start the bot
         logger.info("Bot is starting...")
-        updater.start_polling(drop_pending_updates=True)
+        updater.start_polling(drop_pending_updates=True, clean=True)
         logger.info("Bot is running...")
         updater.idle()
         
     except Exception as e:
         logger.error(f"Critical error: {str(e)}")
+        cleanup()
         sys.exit(1)
 
 if __name__ == '__main__':

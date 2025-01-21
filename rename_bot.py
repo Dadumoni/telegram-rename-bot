@@ -1,12 +1,28 @@
 import re
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-from telegram.error import TelegramError
+from telegram.error import TelegramError, Conflict
 import time
 import os
+import logging
+import sys
+
+# Set up logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
 
 # Get bot token from environment variable
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7654850355:AAGtizZP468SNYYHFJ9lQY-8Ee561vunQWk")
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME', "@TGMoviez_Hub")
+
+def error_handler(update, context):
+    """Log Errors caused by Updates."""
+    logger.warning('Update "%s" caused error "%s"', update, context.error)
+    if isinstance(context.error, Conflict):
+        logger.error("Conflict error: Another instance is running")
+        sys.exit(1)
 
 def start(update, context):
     update.message.reply_text(
@@ -163,20 +179,29 @@ def process_all_command(update, context):
         message.reply_text(f"Error while processing messages. Please try again or contact support.")
 
 def main():
-    # Create updater and dispatcher
-    updater = Updater(BOT_TOKEN, use_context=True)
-    dp = updater.dispatcher
+    try:
+        # Create updater and dispatcher
+        updater = Updater(BOT_TOKEN, use_context=True)
+        dp = updater.dispatcher
 
-    # Add handlers
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("help", help_command))
-    dp.add_handler(CommandHandler("process_all", process_all_command))
-    dp.add_handler(MessageHandler(Filters.all, handle_message))
+        # Add handlers
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CommandHandler("help", help_command))
+        dp.add_handler(CommandHandler("process_all", process_all_command))
+        dp.add_handler(MessageHandler(Filters.all, handle_message))
+        
+        # Add error handler
+        dp.add_error_handler(error_handler)
 
-    # Start the bot
-    print("Bot is running...")
-    updater.start_polling()
-    updater.idle()
+        # Start the bot
+        logger.info("Bot is starting...")
+        updater.start_polling(drop_pending_updates=True)
+        logger.info("Bot is running...")
+        updater.idle()
+        
+    except Exception as e:
+        logger.error(f"Critical error: {str(e)}")
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

@@ -23,8 +23,14 @@ PORT = int(os.getenv('PORT', '8080'))
 class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b'Bot is running')
+
+    def do_HEAD(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
 
 def run_web_server():
     server_address = ('', PORT)
@@ -213,7 +219,6 @@ def main():
                 request_kwargs={
                     'read_timeout': 60,
                     'connect_timeout': 60,
-                    'pool_timeout': 60,
                     'connect_retries': 3
                 }
             )
@@ -242,7 +247,7 @@ def main():
                 timeout=60,
                 read_latency=10.0,
                 allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post'],
-                bootstrap_retries=-1,  # Retry forever
+                bootstrap_retries=3,  # Retry a few times instead of forever
                 clean=True  # Clean any pending updates
             )
 

@@ -5,6 +5,8 @@ import time
 import os
 import logging
 import sys
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import threading
 
 # Set up logging
 logging.basicConfig(
@@ -13,9 +15,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Get bot token from environment variable
+# Get bot token and port from environment variables
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7654850355:AAGtizZP468SNYYHFJ9lQY-8Ee561vunQWk")
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME', "@TGMoviez_Hub")
+PORT = int(os.getenv('PORT', '8080'))
+
+class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running')
+
+def run_web_server():
+    server_address = ('', PORT)
+    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    logger.info(f"Starting web server on port {PORT}")
+    httpd.serve_forever()
 
 def error_handler(update, context):
     """Log Errors caused by Updates."""
@@ -185,13 +200,23 @@ def process_all_command(update, context):
 
 def main():
     """Start the bot."""
+    # Start web server in a separate thread
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
+    
     while True:
         try:
-            # Create the Updater
-            updater = Updater(BOT_TOKEN, use_context=True, request_kwargs={
-                'read_timeout': 30,
-                'connect_timeout': 30
-            })
+            # Create the Updater with a higher timeout
+            updater = Updater(
+                BOT_TOKEN,
+                use_context=True,
+                request_kwargs={
+                    'read_timeout': 60,
+                    'connect_timeout': 60,
+                    'pool_timeout': 60,
+                    'connect_retries': 3
+                }
+            )
 
             # Get the dispatcher to register handlers
             dp = updater.dispatcher
@@ -210,13 +235,15 @@ def main():
             # Add error handler
             dp.add_error_handler(error_handler)
 
-            # Start the Bot
+            # Start the Bot with specific webhook settings
             logger.info("Starting bot...")
             updater.start_polling(
                 drop_pending_updates=True,
-                timeout=30,
-                read_latency=5.0,
-                allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post']
+                timeout=60,
+                read_latency=10.0,
+                allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post'],
+                bootstrap_retries=-1,  # Retry forever
+                clean=True  # Clean any pending updates
             )
 
             # Run the bot until it's stopped
@@ -224,7 +251,7 @@ def main():
             
         except Exception as e:
             logger.error(f"Error in main loop: {e}")
-            time.sleep(10)  # Wait before retrying
+            time.sleep(30)  # Longer wait before retrying
             continue
 
 if __name__ == '__main__':

@@ -1,1 +1,1 @@
-worker: python rename_bot.py
+web: python rename_bot.py

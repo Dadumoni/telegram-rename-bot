@@ -70,8 +70,8 @@ def error_handler(update, context):
     logger.warning('Update "%s" caused error "%s"', update, context.error)
     if isinstance(context.error, Conflict):
         logger.error("Conflict error: Another instance is running")
-        cleanup()
-        sys.exit(1)
+        # Don't exit, just log and continue
+        return
 
 def start(update, context):
     update.message.reply_text(
@@ -232,6 +232,46 @@ def process_all_command(update, context):
         message.reply_text(f"Error while processing messages. Please try again or contact support.")
 
 def main():
+    """Start the bot."""
+    try:
+        # Create the Updater and pass it your bot's token.
+        updater = Updater(BOT_TOKEN, use_context=True)
+
+        # Get the dispatcher to register handlers
+        dp = updater.dispatcher
+
+        # Add handlers
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CommandHandler("help", help_command))
+        dp.add_handler(CommandHandler("process_all", process_all_command))
+        
+        # Message handler
+        dp.add_handler(MessageHandler(
+            Filters.document | Filters.video | Filters.forwarded,
+            handle_message
+        ))
+
+        # Add error handler
+        dp.add_error_handler(error_handler)
+
+        # Start the Bot with a higher read timeout and drop_pending_updates
+        updater.start_polling(
+            drop_pending_updates=True,  # Ignore updates that came while the bot was offline
+            timeout=30,  # Increase timeout
+            read_latency=5.0,  # Add some latency between reads
+            allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post']  # Only process necessary updates
+        )
+
+        # Run the bot until you press Ctrl-C
+        updater.idle()
+        
+    except Exception as e:
+        logger.error(f"Error in main: {e}")
+        # Add a delay before retrying
+        time.sleep(10)
+        main()  # Retry
+
+if __name__ == '__main__':
     # Register cleanup handlers
     atexit.register(cleanup)
     signal.signal(signal.SIGINT, signal_handler)
@@ -242,30 +282,4 @@ def main():
         cleanup()
         sys.exit(1)
 
-    try:
-        # Create updater and dispatcher
-        updater = Updater(BOT_TOKEN, use_context=True, request_kwargs={'read_timeout': 30, 'connect_timeout': 15})
-        dp = updater.dispatcher
-
-        # Add handlers
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(CommandHandler("help", help_command))
-        dp.add_handler(CommandHandler("process_all", process_all_command))
-        dp.add_handler(MessageHandler(Filters.all, handle_message))
-        
-        # Add error handler
-        dp.add_error_handler(error_handler)
-
-        # Start the bot
-        logger.info("Bot is starting...")
-        updater.start_polling(drop_pending_updates=True, timeout=30)
-        logger.info("Bot is running...")
-        updater.idle()
-        
-    except Exception as e:
-        logger.error(f"Critical error: {str(e)}")
-        cleanup()
-        sys.exit(1)
-
-if __name__ == '__main__':
     main()

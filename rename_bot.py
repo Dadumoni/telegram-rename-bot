@@ -218,8 +218,7 @@ def main():
                 use_context=True,
                 request_kwargs={
                     'read_timeout': 60,
-                    'connect_timeout': 60,
-                    'connect_retries': 3
+                    'connect_timeout': 60
                 }
             )
 
@@ -244,11 +243,9 @@ def main():
             logger.info("Starting bot...")
             updater.start_polling(
                 drop_pending_updates=True,
-                timeout=60,
-                read_latency=10.0,
-                allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post'],
-                bootstrap_retries=3,  # Retry a few times instead of forever
-                clean=True  # Clean any pending updates
+                timeout=30,
+                read_latency=2.0,  # Reduced latency
+                allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post']
             )
 
             # Run the bot until it's stopped
@@ -256,7 +253,7 @@ def main():
             
         except Exception as e:
             logger.error(f"Error in main loop: {e}")
-            time.sleep(30)  # Longer wait before retrying
+            time.sleep(10)  # Reduced retry time
             continue
 
 if __name__ == '__main__':

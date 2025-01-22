@@ -97,8 +97,14 @@ def help_command(update, context):
     )
 
 def clean_filename(text: str) -> str:
-    # Remove username pattern from start [Tg-@username] or similar
-    text = re.sub(r'^\s*\[.*?\]\s*', '', text)
+    # Remove any emojis and special characters from the start
+    text = re.sub(r'^[^\w\s]*', '', text)
+    
+    # Remove the "Join ~" or similar text from start
+    text = re.sub(r'^\s*(Join|INPUT)\s*[~❤️]\s*', '', text)
+    
+    # Remove username pattern from start [@username] or similar
+    text = re.sub(r'\[@[\w_]+\]', '', text)
     
     # Find the position of .mkv extension
     mkv_pos = text.lower().find('.mkv')
@@ -110,14 +116,12 @@ def clean_filename(text: str) -> str:
     text = re.sub(r'@[\w_]+', '', text)  # Remove @username mentions
     text = re.sub(r't\.me/[\w_]+', '', text)  # Remove t.me links
     text = re.sub(r'https?://[^\s]+', '', text)  # Remove http/https links
-    text = re.sub(r'Join[\s\-:]+', '', text, flags=re.IGNORECASE)  # Remove "Join" text
-    text = re.sub(r'Follow[\s\-:]+', '', text, flags=re.IGNORECASE)  # Remove "Follow" text
     
-    # Remove multiple newlines and spaces
-    text = re.sub(r'\s+', ' ', text)
+    # Clean up any extra spaces
+    text = text.strip()
     
     # Add the channel username
-    text = f"{text.strip()}\n\nJoin - {CHANNEL_USERNAME}"
+    text = f"{text}\n\nJoin - {CHANNEL_USERNAME}"
     
     return text
 

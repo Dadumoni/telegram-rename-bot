@@ -5,10 +5,6 @@ import time
 import os
 import logging
 import sys
-import atexit
-import signal
-import tempfile
-import requests
 
 # Set up logging
 logging.basicConfig(
@@ -20,50 +16,6 @@ logger = logging.getLogger(__name__)
 # Get bot token from environment variable
 BOT_TOKEN = os.getenv('BOT_TOKEN', "7654850355:AAGtizZP468SNYYHFJ9lQY-8Ee561vunQWk")
 CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME', "@TGMoviez_Hub")
-
-# Lock file path
-LOCK_FILE = os.path.join(tempfile.gettempdir(), 'telegram_rename_bot.lock')
-
-def cleanup():
-    """Clean up function to remove lock file"""
-    try:
-        if os.path.exists(LOCK_FILE):
-            os.remove(LOCK_FILE)
-            logger.info("Lock file removed")
-    except Exception as e:
-        logger.error(f"Error removing lock file: {e}")
-
-def signal_handler(signum, frame):
-    """Handle shutdown signals"""
-    logger.info(f"Received signal {signum}")
-    cleanup()
-    sys.exit(0)
-
-def check_single_instance():
-    """Ensure only one instance of the bot is running"""
-    try:
-        # Make an API call to check bot status
-        try:
-            response = requests.get(
-                f'https://api.telegram.org/bot{BOT_TOKEN}/getMe',
-                timeout=5
-            )
-            if response.status_code != 200:
-                logger.info("Bot token is valid and not in use")
-                return True
-            else:
-                # If we get a 200 response, the bot token is valid
-                # In cloud environments, we should continue anyway
-                logger.info("Bot token is valid, continuing startup")
-                return True
-        except Exception as e:
-            logger.info(f"Could not check bot status: {e}, proceeding with startup")
-            return True
-
-        return True
-    except Exception as e:
-        logger.error(f"Error in check_single_instance: {e}")
-        return True  # Continue anyway in case of errors
 
 def error_handler(update, context):
     """Log Errors caused by Updates."""
@@ -233,53 +185,47 @@ def process_all_command(update, context):
 
 def main():
     """Start the bot."""
-    try:
-        # Create the Updater and pass it your bot's token.
-        updater = Updater(BOT_TOKEN, use_context=True)
+    while True:
+        try:
+            # Create the Updater
+            updater = Updater(BOT_TOKEN, use_context=True, request_kwargs={
+                'read_timeout': 30,
+                'connect_timeout': 30
+            })
 
-        # Get the dispatcher to register handlers
-        dp = updater.dispatcher
+            # Get the dispatcher to register handlers
+            dp = updater.dispatcher
 
-        # Add handlers
-        dp.add_handler(CommandHandler("start", start))
-        dp.add_handler(CommandHandler("help", help_command))
-        dp.add_handler(CommandHandler("process_all", process_all_command))
-        
-        # Message handler
-        dp.add_handler(MessageHandler(
-            Filters.document | Filters.video | Filters.forwarded,
-            handle_message
-        ))
+            # Add handlers
+            dp.add_handler(CommandHandler("start", start))
+            dp.add_handler(CommandHandler("help", help_command))
+            dp.add_handler(CommandHandler("process_all", process_all_command))
+            
+            # Message handler
+            dp.add_handler(MessageHandler(
+                Filters.document | Filters.video | Filters.forwarded,
+                handle_message
+            ))
 
-        # Add error handler
-        dp.add_error_handler(error_handler)
+            # Add error handler
+            dp.add_error_handler(error_handler)
 
-        # Start the Bot with a higher read timeout and drop_pending_updates
-        updater.start_polling(
-            drop_pending_updates=True,  # Ignore updates that came while the bot was offline
-            timeout=30,  # Increase timeout
-            read_latency=5.0,  # Add some latency between reads
-            allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post']  # Only process necessary updates
-        )
+            # Start the Bot
+            logger.info("Starting bot...")
+            updater.start_polling(
+                drop_pending_updates=True,
+                timeout=30,
+                read_latency=5.0,
+                allowed_updates=['message', 'channel_post', 'edited_message', 'edited_channel_post']
+            )
 
-        # Run the bot until you press Ctrl-C
-        updater.idle()
-        
-    except Exception as e:
-        logger.error(f"Error in main: {e}")
-        # Add a delay before retrying
-        time.sleep(10)
-        main()  # Retry
+            # Run the bot until it's stopped
+            updater.idle()
+            
+        except Exception as e:
+            logger.error(f"Error in main loop: {e}")
+            time.sleep(10)  # Wait before retrying
+            continue
 
 if __name__ == '__main__':
-    # Register cleanup handlers
-    atexit.register(cleanup)
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-
-    # Check for other instances
-    if not check_single_instance():
-        cleanup()
-        sys.exit(1)
-
     main()
